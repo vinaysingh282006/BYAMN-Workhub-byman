@@ -193,10 +193,12 @@ const Auth = () => {
                     value={formData.fullName}
                     onChange={handleChange}
                     className={`pl-10 ${errors.fullName ? 'border-destructive' : ''}`}
+                    aria-invalid={!!errors.fullName}
+                    aria-describedby={errors.fullName ? "fullName-error" : undefined}
                   />
                 </div>
                 {errors.fullName && (
-                  <p className="text-destructive text-xs">{errors.fullName}</p>
+                  <p id="fullName-error" className="text-destructive text-xs">{errors.fullName}</p>
                 )}
               </div>
             )}
@@ -213,10 +215,12 @@ const Auth = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? "email-error" : undefined}
                 />
               </div>
               {errors.email && (
-                <p className="text-destructive text-xs">{errors.email}</p>
+                <p id="email-error" className="text-destructive text-xs">{errors.email}</p>
               )}
             </div>
 
@@ -234,17 +238,20 @@ const Auth = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className={`pl-10 pr-10 ${errors.password ? 'border-destructive' : ''}`}
+                      aria-invalid={!!errors.password}
+                      aria-describedby={errors.password ? "password-error" : undefined}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-destructive text-xs">{errors.password}</p>
+                    <p id="password-error" className="text-destructive text-xs">{errors.password}</p>
                   )}
                 </div>
 
@@ -261,10 +268,12 @@ const Auth = () => {
                         value={formData.confirmPassword}
                         onChange={handleChange}
                         className={`pl-10 ${errors.confirmPassword ? 'border-destructive' : ''}`}
+                        aria-invalid={!!errors.confirmPassword}
+                        aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
                       />
                     </div>
                     {errors.confirmPassword && (
-                      <p className="text-destructive text-xs">{errors.confirmPassword}</p>
+                      <p id="confirmPassword-error" className="text-destructive text-xs">{errors.confirmPassword}</p>
                     )}
                   </div>
                 )}

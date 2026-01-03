@@ -124,6 +124,7 @@ const ProfileEdit = () => {
             variant="ghost" 
             className="mb-6 gap-2"
             onClick={() => navigate('/profile')}
+            aria-label="Back to profile"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Profile
@@ -143,8 +144,9 @@ const ProfileEdit = () => {
                     value={formData.fullName}
                     onChange={handleChange}
                     placeholder="Your full name"
+                    aria-describedby="fullName-help"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p id="fullName-help" className="text-xs text-muted-foreground">
                     {formData.fullName.length}/50 characters
                   </p>
                 </div>
@@ -158,8 +160,9 @@ const ProfileEdit = () => {
                     onChange={handleChange}
                     placeholder="A short description about yourself"
                     rows={3}
+                    aria-describedby="bio-help"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p id="bio-help" className="text-xs text-muted-foreground">
                     {formData.bio.length}/200 characters
                   </p>
                 </div>
@@ -172,8 +175,9 @@ const ProfileEdit = () => {
                     value={formData.profileImage}
                     onChange={handleChange}
                     placeholder="https://example.com/image.jpg"
+                    aria-describedby="profileImage-help"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p id="profileImage-help" className="text-xs text-muted-foreground">
                     Enter a direct URL to your profile picture (JPG, PNG, GIF, WebP)
                   </p>
                 </div>
