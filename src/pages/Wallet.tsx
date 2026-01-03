@@ -208,7 +208,7 @@ const Wallet = () => {
       // Update wallet to reflect pending add money
       await createTransactionAndAdjustWallet(profile.uid, transaction, {
         pendingAddMoney: amount
-      });
+      }, profile.uid);
 
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/addMoney'));
@@ -337,7 +337,7 @@ const Wallet = () => {
 
       await createTransactionAndAdjustWallet(profile.uid, transaction, {
         earnedBalance: -amount // Deduct from earned balance
-      });
+      }, profile.uid);
 
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/withdrawals'));
