@@ -694,8 +694,6 @@ export const rejectWorkAndRestoreCampaignBudget = async (
   }
 };
 
-<<<<<<< Updated upstream
-=======
 // Utility function to fetch time-based leaderboard data
 export const fetchTimeBasedLeaderboard = async (
   period: 'daily' | 'weekly' | 'monthly'
@@ -791,7 +789,6 @@ export const fetchTimeBasedLeaderboard = async (
   return promise;
 };
 
->>>>>>> Stashed changes
 // Utility functions for common data fetching operations
 export const fetchUserData = async (uid: string): Promise<any> => {
   const cacheKey = `user:${uid}`;
