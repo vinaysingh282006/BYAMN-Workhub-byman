@@ -29,6 +29,19 @@ const Auth = () => {
   const navigate = useNavigate();
   const { signIn, signUp, resetPassword, user } = useAuth();
   const { toast } = useToast();
+  
+  // Check for session expiration message
+  useEffect(() => {
+    const isSessionExpired = localStorage.getItem('sessionExpired');
+    if (isSessionExpired === 'true') {
+      toast({
+        title: 'Session Expired',
+        description: 'Your session has expired due to inactivity. Please log in again.',
+        variant: 'destructive',
+      });
+      localStorage.removeItem('sessionExpired'); // Remove the flag after showing the message
+    }
+  }, [toast]);
 
   const [isLogin, setIsLogin] = useState(mode !== 'register');
   const [showPassword, setShowPassword] = useState(false);

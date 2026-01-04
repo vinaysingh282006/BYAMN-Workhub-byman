@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { 
   User, 
   createUserWithEmailAndPassword, 
@@ -45,6 +45,9 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  // Session management
+  setSessionTimeout: (timeoutMs: number) => void;
+  forceLogout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -61,6 +64,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Session timeout configuration
+  const [sessionTimeout, setSessionTimeout] = useState<number>(30 * 60 * 1000); // 30 minutes default
+  const [lastActivity, setLastActivity] = useState<number>(Date.now());
+  const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Function to reset session timeout
+  const resetSessionTimeout = () => {
+    setLastActivity(Date.now());
+    
+    // Clear existing timeout if any
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    
+    // Set new timeout
+    sessionTimeoutRef.current = setTimeout(() => {
+      // Auto logout when session expires
+      handleSessionTimeout();
+    }, sessionTimeout);
+  };
+  
+  // Function to handle session timeout
+  const handleSessionTimeout = async () => {
+    console.log('Session timed out due to inactivity');
+    await forceLogout();
+  };
+  
+  // Function to force logout (used for session timeout)
+  const forceLogout = async () => {
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    
+    // Clear Firebase auth state
+    await signOut(auth);
+    
+    // Clear local state
+    setUser(null);
+    setProfile(null);
+    
+    // Clear all cached data
+    dataCache.clearAll();
+    
+    // Clear any stored session data
+    localStorage.clear();
+    sessionStorage.clear();
+  };
 
   const fetchProfile = async (uid: string) => {
     const snapshot = await get(child(ref(database), `users/${uid}`));
@@ -77,17 +128,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Set up event listeners for user activity
+    const handleUserActivity = () => {
+      resetSessionTimeout();
+    };
+    
+    // Add event listeners for user activity
+    window.addEventListener('mousedown', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('scroll', handleUserActivity);
+    window.addEventListener('touchstart', handleUserActivity);
+    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
         await fetchProfile(user.uid);
+        // Start session timeout tracking
+        resetSessionTimeout();
       } else {
         setProfile(null);
+        // Clear timeout when user logs out
+        if (sessionTimeoutRef.current) {
+          clearTimeout(sessionTimeoutRef.current);
+        }
       }
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Clean up event listeners and timeout
+    return () => {
+      unsubscribe();
+      window.removeEventListener('mousedown', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('scroll', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+    };
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -144,9 +222,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    
+    // Sign out from Firebase
     await signOut(auth);
+    
+    // Clear local state
     setUser(null);
     setProfile(null);
+    
+    // Clear all cached data
+    dataCache.clearAll();
+    
+    // Clear any stored session data
+    localStorage.clear();
+    sessionStorage.clear();
   };
 
   const resetPassword = async (email: string) => {
@@ -208,6 +300,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     resetPassword,
     updateProfile,
     refreshProfile,
+    // Session management functions
+    setSessionTimeout,
+    forceLogout,
   };
 
   return (

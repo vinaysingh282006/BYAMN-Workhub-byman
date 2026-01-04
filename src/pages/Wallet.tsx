@@ -33,6 +33,11 @@ import {
   Loader2
 } from 'lucide-react';
 import { z } from 'zod';
+import { 
+  createTransactionAndAdjustWallet,
+  fetchWalletData,
+  fetchTransactions
+} from '@/lib/data-cache';
 
 interface WalletData {
   earnedBalance: number;
@@ -83,21 +88,22 @@ const Wallet = () => {
   });
 
   useEffect(() => {
-    const fetchWalletData = async () => {
+    const fetchWalletAndTransactions = async () => {
       if (!profile?.uid) return;
 
       try {
-        // Fetch wallet
-        const walletSnap = await get(ref(database, `wallets/${profile.uid}`));
-        if (walletSnap.exists()) {
-          setWallet(walletSnap.val());
+        setLoading(true);
+
+        // Fetch wallet data using the data cache
+        const walletData = await fetchWalletData(profile.uid);
+        if (walletData) {
+          setWallet(walletData);
         }
 
-        // Fetch transactions
-        const transSnap = await get(ref(database, `transactions/${profile.uid}`));
-        if (transSnap.exists()) {
-          const data = transSnap.val();
-          const transArray: Transaction[] = Object.entries(data)
+        // Fetch transactions using the data cache
+        const transactionsData = await fetchTransactions(profile.uid);
+        if (transactionsData) {
+          const transArray: Transaction[] = Object.entries(transactionsData)
             .map(([id, trans]: [string, any]) => ({
               id,
               ...trans,
@@ -107,13 +113,18 @@ const Wallet = () => {
         }
       } catch (error) {
         console.error('Error fetching wallet:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load wallet data. Please try again later.',
+          variant: 'destructive'
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchWalletData();
-  }, [profile?.uid]);
+    fetchWalletAndTransactions();
+  }, [profile?.uid, toast]);
 
   const handleAddMoney = async () => {
     if (!profile?.uid) return;
@@ -172,16 +183,20 @@ const Wallet = () => {
         }
       }
 
-      // Create transaction
-      const transRef = push(ref(database, `transactions/${profile.uid}`));
-      await set(transRef, {
+      // Create transaction and adjust wallet atomically
+      const transaction = {
         type: 'add_money',
         amount,
         status: 'pending',
         description: 'Add money request',
         upiTransactionId: addMoneyForm.upiTransactionId,
         createdAt: Date.now(),
-      });
+      };
+
+      // Update wallet to reflect pending add money using atomic operation
+      await createTransactionAndAdjustWallet(profile.uid, transaction, {
+        pendingAddMoney: amount
+      }, profile.uid);
 
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/addMoney'));
@@ -193,7 +208,7 @@ const Wallet = () => {
         upiTransactionId: addMoneyForm.upiTransactionId,
         status: 'pending',
         createdAt: Date.now(),
-        transactionId: transRef.key,
+        transactionId: requestRef.key, // Use the admin request ID as transactionId
       });
 
       toast({
@@ -204,9 +219,22 @@ const Wallet = () => {
       setAddMoneyOpen(false);
       setAddMoneyForm({ amount: '', upiTransactionId: '' });
       
-      // Refresh data
-      const walletSnap = await get(ref(database, `wallets/${profile.uid}`));
-      if (walletSnap.exists()) setWallet(walletSnap.val());
+      // Refresh data using the data cache
+      const updatedWallet = await fetchWalletData(profile.uid);
+      if (updatedWallet) {
+        setWallet(updatedWallet);
+      }
+      
+      const updatedTransactions = await fetchTransactions(profile.uid);
+      if (updatedTransactions) {
+        const transArray: Transaction[] = Object.entries(updatedTransactions)
+          .map(([id, trans]: [string, any]) => ({
+            id,
+            ...trans,
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+        setTransactions(transArray);
+      }
     } catch (error) {
       console.error('Error adding money:', error);
       toast({
@@ -285,16 +313,19 @@ const Wallet = () => {
         }
       }
 
-      // Create transaction
-      const transRef = push(ref(database, `transactions/${profile.uid}`));
-      await set(transRef, {
+      // Create transaction and adjust wallet atomically
+      const transaction = {
         type: 'withdrawal',
         amount,
         status: 'pending',
         description: 'Withdrawal request',
         upiId: withdrawForm.upiId,
         createdAt: Date.now(),
-      });
+      };
+
+      await createTransactionAndAdjustWallet(profile.uid, transaction, {
+        earnedBalance: -amount // Deduct from earned balance
+      }, profile.uid);
 
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/withdrawals'));
@@ -306,7 +337,7 @@ const Wallet = () => {
         upiId: withdrawForm.upiId,
         status: 'pending',
         createdAt: Date.now(),
-        transactionId: transRef.key,
+        transactionId: requestRef.key, // Use the admin request ID as transactionId
       });
 
       toast({
@@ -316,6 +347,23 @@ const Wallet = () => {
 
       setWithdrawOpen(false);
       setWithdrawForm({ amount: '', upiId: '' });
+      
+      // Refresh data using the data cache
+      const updatedWallet = await fetchWalletData(profile.uid);
+      if (updatedWallet) {
+        setWallet(updatedWallet);
+      }
+      
+      const updatedTransactions = await fetchTransactions(profile.uid);
+      if (updatedTransactions) {
+        const transArray: Transaction[] = Object.entries(updatedTransactions)
+          .map(([id, trans]: [string, any]) => ({
+            id,
+            ...trans,
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+        setTransactions(transArray);
+      }
     } catch (error) {
       console.error('Error withdrawing:', error);
       toast({
