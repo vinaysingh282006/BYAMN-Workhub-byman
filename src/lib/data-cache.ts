@@ -18,6 +18,14 @@ interface CacheEntry {
   expiry: number;
 }
 
+// Interface for user profile to validate permissions
+interface UserProfile {
+  uid: string;
+  email: string;
+  role: 'user' | 'admin';
+  isBlocked: boolean;
+}
+
 class DataCache {
   private cache: Map<string, CacheEntry>;
   private pendingRequests: Map<string, Promise<any>>;
@@ -97,11 +105,46 @@ class DataCache {
 // Global cache instance
 export const dataCache = new DataCache();
 
+// Verify user authorization
+const verifyUserAuthorization = async (currentUserId: string, targetUserId: string, requiredRole?: 'admin'): Promise<boolean> => {
+  if (requiredRole === 'admin') {
+    // Check if current user is an admin
+    const userRef = ref(database, `users/${currentUserId}`);
+    const userSnap = await get(userRef);
+    
+    if (userSnap.exists()) {
+      const userData = userSnap.val() as UserProfile;
+      return userData.role === 'admin' && !userData.isBlocked;
+    }
+    return false;
+  }
+  
+  // For regular operations, user must match target or be admin
+  if (currentUserId === targetUserId) return true;
+  
+  // Check if current user is admin
+  const userRef = ref(database, `users/${currentUserId}`);
+  const userSnap = await get(userRef);
+  
+  if (userSnap.exists()) {
+    const userData = userSnap.val() as UserProfile;
+    return userData.role === 'admin' && !userData.isBlocked;
+  }
+  
+  return false;
+};
+
 // Atomic wallet operations using Firebase transactions
 export const updateWalletBalance = async (
   uid: string, 
-  updateFn: (currentBalance: WalletBalance) => Partial<WalletBalance> | null
+  updateFn: (currentBalance: WalletBalance) => Partial<WalletBalance> | null,
+  currentUserId?: string
 ): Promise<WalletBalance | null> => {
+  // Verify authorization if currentUserId is provided
+  if (currentUserId && !(await verifyUserAuthorization(currentUserId, uid))) {
+    throw new Error('Unauthorized: You can only update your own wallet balance');
+  }
+  
   const walletRef = ref(database, `wallets/${uid}`);
   const cacheKey = `wallet:${uid}`;
   
@@ -142,8 +185,14 @@ export const updateWalletBalance = async (
 export const createTransactionAndAdjustWallet = async (
   uid: string,
   transaction: any,
-  walletUpdate: Partial<WalletBalance>
+  walletUpdate: Partial<WalletBalance>,
+  currentUserId?: string
 ): Promise<void> => {
+  // Verify authorization if currentUserId is provided
+  if (currentUserId && !(await verifyUserAuthorization(currentUserId, uid))) {
+    throw new Error('Unauthorized: You can only update your own wallet');
+  }
+  
   const transactionRef = ref(database, `transactions/${uid}`);
   const walletRef = ref(database, `wallets/${uid}`);
   const cacheKey = `wallet:${uid}`;
@@ -200,12 +249,29 @@ export const createTransactionAndAdjustWallet = async (
 export const deductCampaignBudget = async (
   campaignId: string,
   amount: number,
-  uid: string
+  uid: string,
+  currentUserId?: string
 ): Promise<boolean> => {
+  // Verify authorization if currentUserId is provided
+  if (currentUserId && !(await verifyUserAuthorization(currentUserId, uid))) {
+    throw new Error('Unauthorized: You can only deduct from your own campaigns');
+  }
+  
   const campaignRef = ref(database, `campaigns/${campaignId}`);
   const walletRef = ref(database, `wallets/${uid}`);
   
   try {
+    // Verify that the campaign belongs to the user
+    const campaignSnap = await get(campaignRef);
+    if (!campaignSnap.exists()) {
+      throw new Error('Campaign does not exist');
+    }
+    
+    const campaignData = campaignSnap.val();
+    if (campaignData.creatorId !== uid) {
+      throw new Error('Unauthorized: You can only deduct from your own campaigns');
+    }
+    
     // Update campaign budget atomically
     const campaignResult = await runTransaction(campaignRef, (currentData) => {
       if (!currentData) return undefined; // Abort if campaign doesn't exist
@@ -268,13 +334,30 @@ export const approveWorkAndCredit = async (
   workId: string,
   userId: string,
   campaignId: string,
-  reward: number
+  reward: number,
+  currentAdminId?: string
 ): Promise<boolean> => {
+  // Verify admin authorization
+  if (currentAdminId && !(await verifyUserAuthorization(currentAdminId, userId, 'admin'))) {
+    throw new Error('Unauthorized: Only admins can approve work');
+  }
+  
   const workRef = ref(database, `works/${userId}/${workId}`);
   const walletRef = ref(database, `wallets/${userId}`);
   const userRef = ref(database, `users/${userId}`);
   
   try {
+    // Verify that the work exists and is pending
+    const workSnap = await get(workRef);
+    if (!workSnap.exists()) {
+      throw new Error('Work does not exist');
+    }
+    
+    const workData = workSnap.val();
+    if (workData.status !== 'pending') {
+      throw new Error('Work is not in pending status');
+    }
+    
     // Update work status atomically
     const workResult = await runTransaction(workRef, (currentData) => {
       if (!currentData || currentData.status !== 'pending') {
@@ -310,7 +393,8 @@ export const approveWorkAndCredit = async (
         if (userSnap.exists()) {
           const userData = userSnap.val();
           await update(userRef, {
-            earnedMoney: (userData.earnedMoney || 0) + reward
+            earnedMoney: (userData.earnedMoney || 0) + reward,
+            approvedWorks: (userData.approvedWorks || 0) + 1
           });
         }
         
@@ -338,14 +422,31 @@ export const processMoneyRequest = async (
   type: 'add_money' | 'withdrawal',
   userId: string,
   amount: number,
-  status: 'approved' | 'rejected'
+  status: 'approved' | 'rejected',
+  currentAdminId?: string
 ): Promise<boolean> => {
+  // Verify admin authorization
+  if (currentAdminId && !(await verifyUserAuthorization(currentAdminId, userId, 'admin'))) {
+    throw new Error('Unauthorized: Only admins can process money requests');
+  }
+  
   const requestPath = type === 'add_money' ? 'adminRequests/addMoney' : 'adminRequests/withdrawals';
   const requestRef = ref(database, `${requestPath}/${requestId}`);
   const walletRef = ref(database, `wallets/${userId}`);
   const transactionRef = ref(database, `transactions/${userId}`);
   
   try {
+    // Verify that the request exists
+    const requestSnap = await get(requestRef);
+    if (!requestSnap.exists()) {
+      throw new Error('Request does not exist');
+    }
+    
+    const requestData = requestSnap.val();
+    if (requestData.status !== 'pending') {
+      throw new Error('Request is not in pending status');
+    }
+    
     // Update request status
     await update(requestRef, { status });
     

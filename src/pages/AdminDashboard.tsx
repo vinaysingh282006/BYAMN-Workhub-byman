@@ -247,7 +247,7 @@ const AdminDashboard = () => {
         try {
             if (action === 'approve') {
                 // Use atomic operation to approve work and credit user
-                const success = await approveWorkAndCredit(work.id, work.userId, work.campaignId, work.reward);
+                const success = await approveWorkAndCredit(work.id, work.userId, work.campaignId, work.reward, profile?.uid);
                 if (success) {
                     toast({ title: `Work approved and credited` });
                 } else {
@@ -271,7 +271,7 @@ const AdminDashboard = () => {
     const handleMoneyRequest = async (req: MoneyRequest, action: 'approve' | 'reject') => {
         try {
             const status = action === 'approve' ? 'approved' : 'rejected';
-            const success = await processMoneyRequest(req.id, req.type, req.userId, req.amount, status);
+            const success = await processMoneyRequest(req.id, req.type, req.userId, req.amount, status, profile?.uid);
             if (success) {
                 toast({ title: `Request ${action}d` });
             } else {
