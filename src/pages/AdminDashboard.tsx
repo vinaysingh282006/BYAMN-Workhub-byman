@@ -38,7 +38,7 @@ import {
     Clock,
     ExternalLink
 } from 'lucide-react';
-import { approveWorkAndCredit, processMoneyRequest } from '@/lib/data-cache';
+import { approveWorkAndCredit, processMoneyRequest, rejectWorkAndRestoreCampaignBudget } from '@/lib/data-cache';
 
 // Interfaces
 interface UserData {
@@ -255,11 +255,14 @@ const AdminDashboard = () => {
                     return;
                 }
             } else {
-                // Update work status to rejected
-                await update(ref(database, `works/${work.userId}/${work.id}`), {
-                    status: 'rejected'
-                });
-                toast({ title: `Work rejected` });
+                // Use atomic operation to reject work and restore campaign budget
+                const success = await rejectWorkAndRestoreCampaignBudget(work.id, work.userId, work.campaignId, profile?.uid);
+                if (success) {
+                    toast({ title: `Work rejected` });
+                } else {
+                    toast({ title: "Work rejection failed", variant: "destructive" });
+                    return;
+                }
             }
             fetchAllData();
         } catch (error) {

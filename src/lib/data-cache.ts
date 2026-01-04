@@ -639,6 +639,61 @@ export const submitWorkForCampaign = async (
   }
 };
 
+// Utility function for rejecting work and updating campaign budget
+export const rejectWorkAndRestoreCampaignBudget = async (
+  workId: string,
+  userId: string,
+  campaignId: string,
+  currentAdminId?: string
+): Promise<boolean> => {
+  // Verify admin authorization
+  if (currentAdminId && !(await verifyUserAuthorization(currentAdminId, userId, 'admin'))) {
+    throw new Error('Unauthorized: Only admins can reject work');
+  }
+
+  const workRef = ref(database, `works/${userId}/${workId}`);
+  const campaignRef = ref(database, `campaigns/${campaignId}`);
+
+  try {
+    // Get current work data to verify status
+    const workSnap = await get(workRef);
+    if (!workSnap.exists()) {
+      throw new Error('Work does not exist');
+    }
+
+    const workData = workSnap.val();
+    if (workData.status !== 'pending') {
+      throw new Error('Work is not in pending status');
+    }
+
+    // Update work status to rejected
+    await update(workRef, {
+      status: 'rejected'
+    });
+
+    // Update campaign completed workers count
+    const campaignSnap = await get(campaignRef);
+    if (campaignSnap.exists()) {
+      const campaignData = campaignSnap.val();
+      if (campaignData.completedWorkers > 0) {
+        await update(campaignRef, {
+          completedWorkers: Math.max(0, campaignData.completedWorkers - 1)
+        });
+      }
+    }
+
+    // Invalidate cache
+    dataCache.clear(`works:${userId}`);
+    dataCache.clear(`campaigns:all`);
+    dataCache.clear(`campaign:${campaignId}`);
+
+    return true;
+  } catch (error) {
+    console.error('Error rejecting work:', error);
+    throw error;
+  }
+};
+
 // Utility functions for common data fetching operations
 export const fetchUserData = async (uid: string): Promise<any> => {
   const cacheKey = `user:${uid}`;
