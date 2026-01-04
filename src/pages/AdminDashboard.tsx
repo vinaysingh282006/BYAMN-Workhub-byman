@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ref, get, update, remove } from 'firebase/database';
@@ -39,6 +38,7 @@ import {
     Clock,
     ExternalLink
 } from 'lucide-react';
+import { approveWorkAndCredit, processMoneyRequest, rejectWorkAndRestoreCampaignBudget } from '@/lib/data-cache';
 
 // Interfaces
 interface UserData {
@@ -245,27 +245,25 @@ const AdminDashboard = () => {
 
     const handleWorkAction = async (work: WorkData, action: 'approve' | 'reject') => {
         try {
-            // Update work status path: works/{userId}/{workId}
-            await update(ref(database, `works/${work.userId}/${work.id}`), {
-                status: action === 'approve' ? 'approved' : 'rejected'
-            });
-
             if (action === 'approve') {
-                // Add money to user wallet
-                const walletRef = ref(database, `wallets/${work.userId}`);
-                const walletSnap = await get(walletRef);
-                if (walletSnap.exists()) {
-                    const currentBalance = walletSnap.val().earnedBalance || 0;
-                    await update(walletRef, {
-                        earnedBalance: currentBalance + work.reward
-                    });
+                // Use atomic operation to approve work and credit user
+                const success = await approveWorkAndCredit(work.id, work.userId, work.campaignId, work.reward, profile?.uid);
+                if (success) {
+                    toast({ title: `Work approved and credited` });
+                } else {
+                    toast({ title: "Work approval failed", variant: "destructive" });
+                    return;
                 }
-
-                // Record earning transaction
-                // NOTE: Ideally should use a cloud function for atomic updates
+            } else {
+                // Use atomic operation to reject work and restore campaign budget
+                const success = await rejectWorkAndRestoreCampaignBudget(work.id, work.userId, work.campaignId, profile?.uid);
+                if (success) {
+                    toast({ title: `Work rejected` });
+                } else {
+                    toast({ title: "Work rejection failed", variant: "destructive" });
+                    return;
+                }
             }
-
-            toast({ title: `Work ${action}d` });
             fetchAllData();
         } catch (error) {
             console.error(error);
@@ -275,49 +273,14 @@ const AdminDashboard = () => {
 
     const handleMoneyRequest = async (req: MoneyRequest, action: 'approve' | 'reject') => {
         try {
-            const path = req.type === 'add_money' ? 'adminRequests/addMoney' : 'adminRequests/withdrawals';
-
-            // Update request status
-            await update(ref(database, `${path}/${req.id}`), {
-                status: action === 'approve' ? 'approved' : 'rejected'
-            });
-
-            // Update transaction status
-            await update(ref(database, `transactions/${req.userId}/${req.transactionId}`), {
-                status: action === 'approve' ? (req.type === 'add_money' ? 'approved' : 'paid') : 'rejected'
-            });
-
-            if (action === 'approve') {
-                const walletRef = ref(database, `wallets/${req.userId}`);
-                const walletSnap = await get(walletRef);
-                const wallet = walletSnap.val() || { earnedBalance: 0, addedBalance: 0 };
-
-                if (req.type === 'add_money') {
-                    // Add to addedBalance
-                    await update(walletRef, {
-                        addedBalance: (wallet.addedBalance || 0) + req.amount,
-                        pendingAddMoney: Math.max(0, (wallet.pendingAddMoney || 0) - req.amount) // Reduce pending
-                    });
-                } else {
-                    // Withdrawal: Deduct from earnedBalance (already deducted potentially? No, typically deducted upon approval or reserved. 
-                    // In the Wallet.tsx, it didn't seem to reserve funds, just checked balance. 
-                    // So we should deduct now.)
-
-                    // Wait, if it wasn't reserved, users could spend it? 
-                    // Basic implementation: Deduct now.
-                    await update(walletRef, {
-                        earnedBalance: (wallet.earnedBalance || 0) - req.amount,
-                        totalWithdrawn: (wallet.totalWithdrawn || 0) + req.amount
-                    });
-                    
-                    // Also update user profile to track total withdrawn
-                    await update(ref(database, `users/${req.userId}`), {
-                        totalWithdrawn: (wallet.totalWithdrawn || 0) + req.amount
-                    });
-                }
+            const status = action === 'approve' ? 'approved' : 'rejected';
+            const success = await processMoneyRequest(req.id, req.type, req.userId, req.amount, status, profile?.uid);
+            if (success) {
+                toast({ title: `Request ${action}d` });
+            } else {
+                toast({ title: "Request processing failed", variant: "destructive" });
+                return;
             }
-
-            toast({ title: `Request ${action}d` });
             fetchAllData();
         } catch (error) {
             console.error(error);

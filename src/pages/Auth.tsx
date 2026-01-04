@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Loader2 } from 'lucide-react';
 import { z } from 'zod';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -168,11 +170,7 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <Link to="/" className="inline-flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-8 transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
-        </Link>
-
+<Navbar />
         <div className="bg-card rounded-2xl shadow-xl p-8 animate-scale-in">
           <div className="text-center mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary mx-auto mb-4">
@@ -208,10 +206,12 @@ const Auth = () => {
                     value={formData.fullName}
                     onChange={handleChange}
                     className={`pl-10 ${errors.fullName ? 'border-destructive' : ''}`}
+                    aria-invalid={!!errors.fullName}
+                    aria-describedby={errors.fullName ? "fullName-error" : undefined}
                   />
                 </div>
                 {errors.fullName && (
-                  <p className="text-destructive text-xs">{errors.fullName}</p>
+                  <p id="fullName-error" className="text-destructive text-xs">{errors.fullName}</p>
                 )}
               </div>
             )}
@@ -228,10 +228,12 @@ const Auth = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? "email-error" : undefined}
                 />
               </div>
               {errors.email && (
-                <p className="text-destructive text-xs">{errors.email}</p>
+                <p id="email-error" className="text-destructive text-xs">{errors.email}</p>
               )}
             </div>
 
@@ -249,17 +251,20 @@ const Auth = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className={`pl-10 pr-10 ${errors.password ? 'border-destructive' : ''}`}
+                      aria-invalid={!!errors.password}
+                      aria-describedby={errors.password ? "password-error" : undefined}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-destructive text-xs">{errors.password}</p>
+                    <p id="password-error" className="text-destructive text-xs">{errors.password}</p>
                   )}
                 </div>
 
@@ -276,10 +281,12 @@ const Auth = () => {
                         value={formData.confirmPassword}
                         onChange={handleChange}
                         className={`pl-10 ${errors.confirmPassword ? 'border-destructive' : ''}`}
+                        aria-invalid={!!errors.confirmPassword}
+                        aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
                       />
                     </div>
                     {errors.confirmPassword && (
-                      <p className="text-destructive text-xs">{errors.confirmPassword}</p>
+                      <p id="confirmPassword-error" className="text-destructive text-xs">{errors.confirmPassword}</p>
                     )}
                   </div>
                 )}
@@ -345,6 +352,7 @@ const Auth = () => {
           </Link>
         </p>
       </div>
+       <Footer />
     </div>
   );
 };

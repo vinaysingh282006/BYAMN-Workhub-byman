@@ -1,261 +1,260 @@
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { 
-  ArrowRight, 
-  Shield, 
-  Zap, 
-  IndianRupee,
-  Users,
-  TrendingUp,
-  CheckCircle2,
-  Star
-} from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Users,
+  TrendingUp,
+  Wallet,
+  Briefcase,
+  Star,
+  Shield,
+  ArrowRight,
+  Sparkles,
+  Info
+} from 'lucide-react';
 
 const Landing = () => {
   const features = [
     {
-      icon: Zap,
-      title: 'Quick Tasks',
-      description: 'Complete simple micro-tasks and earn money instantly. No special skills required.',
+      icon: Briefcase,
+      title: 'Find Work',
+      description: 'Browse hundreds of micro-tasks and earn money from the comfort of your home',
+      color: 'from-blue-500 to-cyan-500'
     },
     {
-      icon: IndianRupee,
-      title: 'UPI Withdrawals',
-      description: 'Withdraw your earnings directly to your UPI. Fast and secure payments.',
+      icon: TrendingUp,
+      title: 'Track Earnings',
+      description: 'Real-time tracking of your earnings and work progress',
+      color: 'from-green-500 to-emerald-500'
+    },
+    {
+      icon: Wallet,
+      title: 'Fast Payments',
+      description: 'Get paid instantly after completing tasks',
+      color: 'from-purple-500 to-indigo-500'
     },
     {
       icon: Shield,
-      title: 'Admin Verified',
-      description: 'Every task and payment is verified by admins for complete transparency.',
-    },
-    {
-      icon: Users,
-      title: 'Create Campaigns',
-      description: 'Need work done? Create campaigns and get genuine workers from India.',
-    },
+      title: 'Secure Platform',
+      description: 'Your data and payments are protected with bank-level security',
+      color: 'from-amber-500 to-orange-500'
+    }
   ];
 
   const stats = [
-    { value: '10,000+', label: 'Active Workers' },
-    { value: '₹50L+', label: 'Paid Out' },
-    { value: '500+', label: 'Campaigns' },
-    { value: '4.8★', label: 'User Rating' },
+    { value: '10K+', label: 'Active Users' },
+    { value: '50K+', label: 'Tasks Completed' },
+    { value: '₹5M+', label: 'Paid to Workers' },
+    { value: '24/7', label: 'Support Available' }
   ];
 
-  const howItWorks = [
+  const testimonials = [
     {
-      step: '01',
-      title: 'Create Account',
-      description: 'Sign up with your email and verify your account in minutes.',
+      name: 'Rahul Sharma',
+      role: 'Freelancer',
+      content: 'I\'ve earned over ₹50,000 in just 3 months. This platform has changed my life!',
+      rating: 5
     },
     {
-      step: '02',
-      title: 'Browse Campaigns',
-      description: 'Find tasks that match your interests and skills.',
+      name: 'Priya Patel',
+      role: 'Student',
+      content: 'Perfect for earning extra money during college breaks. Simple tasks, quick payments.',
+      rating: 5
     },
     {
-      step: '03',
-      title: 'Submit Work',
-      description: 'Complete tasks and submit proof for admin review.',
+      name: 'Vikram Singh',
+      role: 'Part-time Worker',
+      content: 'The best micro-task platform I\'ve used. Reliable payments and great support team.',
+      rating: 5
+    }
+  ];
+
+  const steps = [
+    {
+      step: 1,
+      title: 'Sign Up',
+      description: 'Create your free account in less than 2 minutes'
     },
     {
-      step: '04',
-      title: 'Get Paid',
-      description: 'Receive earnings in your wallet and withdraw via UPI.',
+      step: 2,
+      title: 'Complete Tasks',
+      description: 'Browse and complete simple micro-tasks'
     },
+    {
+      step: 3,
+      title: 'Earn Money',
+      description: 'Get paid instantly to your wallet'
+    }
   ];
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative bg-gradient-hero text-primary-foreground overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
-        <div className="container mx-auto px-4 py-20 md:py-32 relative">
-          <div className="max-w-3xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 bg-accent/20 text-accent-foreground px-4 py-2 rounded-full text-sm font-medium mb-6 animate-fade-in">
-              <Star className="h-4 w-4 fill-current" />
-              India's Trusted Micro-Task Platform
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5"></div>
+          <div className="container mx-auto px-4 py-20 relative">
+            <div className="max-w-4xl mx-auto text-center">
+              <Badge variant="secondary" className="mb-6 bg-gradient-to-r from-primary to-accent text-primary-foreground">
+                <Sparkles className="h-4 w-4 mr-2" />
+                India's #1 Micro-Task Platform
+              </Badge>
+              <h1 className="font-display text-5xl md:text-7xl font-bold text-foreground mb-6">
+                Earn Money by Completing <span className="text-primary">Simple Tasks</span>
+              </h1>
+              <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+                Join thousands of Indians earning money online. Complete micro-tasks from anywhere, anytime. 
+                Get paid instantly with secure transactions.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link to="/auth?mode=register">
+                  <Button size="lg" className="gap-2 text-lg px-8 py-6">
+                    Start Earning Now
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link to="/campaigns">
+                  <Button size="lg" variant="outline" className="gap-2 text-lg px-8 py-6">
+                    Browse Work
+                    <Briefcase className="h-5 w-5" />
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              Earn Money by Completing{' '}
-              <span className="text-accent">Simple Tasks</span>
-            </h1>
-            <p className="text-lg md:text-xl text-primary-foreground/80 mb-8 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-              Join thousands of workers earning real money. Complete micro-tasks, 
-              submit proof, and get paid directly to your UPI account.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in" style={{ animationDelay: '0.3s' }}>
-              <Link to="/auth?mode=register">
-                <Button variant="hero" size="xl" className="gap-2">
-                  Start Earning Now
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link to="/campaigns">
-                <Button variant="hero-outline" size="xl">
-                  Browse Campaigns
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-        
-        {/* Wave divider */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" fill="hsl(var(--background))" />
-          </svg>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-12 -mt-8 relative z-10">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {stats.map((stat, index) => (
-              <div 
-                key={stat.label} 
-                className="bg-card rounded-xl p-6 text-center shadow-lg card-hover animate-fade-in"
-                style={{ animationDelay: `${0.1 * index}s` }}
-              >
-                <p className="font-display text-2xl md:text-3xl font-bold text-primary mb-1">
-                  {stat.value}
-                </p>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              Why Choose <span className="text-accent">WorkHub</span>?
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              We provide a secure and transparent platform for both workers and campaign creators.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((feature, index) => (
-              <div 
-                key={feature.title}
-                className="bg-card rounded-xl p-6 shadow-md card-hover animate-fade-in"
-                style={{ animationDelay: `${0.1 * index}s` }}
-              >
-                <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-accent" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              How It <span className="text-accent">Works</span>
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Start earning in 4 simple steps. No experience required.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {howItWorks.map((item, index) => (
-              <div 
-                key={item.step}
-                className="relative animate-fade-in"
-                style={{ animationDelay: `${0.1 * index}s` }}
-              >
-                <div className="bg-card rounded-xl p-6 shadow-md card-hover h-full">
-                  <span className="font-display text-5xl font-bold text-accent/20 absolute top-4 right-4">
-                    {item.step}
-                  </span>
-                  <h3 className="font-semibold text-lg mb-2 relative">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground relative">{item.description}</p>
-                </div>
-                {index < 3 && (
-                  <div className="hidden lg:block absolute top-1/2 -right-3 transform -translate-y-1/2">
-                    <ArrowRight className="h-6 w-6 text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Trust Section */}
-      <section className="py-20 bg-gradient-hero text-primary-foreground">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-6">
-              100% Safe & Transparent
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {[
-                'Admin-verified tasks',
-                'Secure UPI payments',
-                'No fake surveys',
-                'Real earning opportunities',
-                'Transparent pricing',
-                'India-focused platform',
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-2 justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-accent" />
-                  <span className="text-sm">{item}</span>
+            
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20">
+              {stats.map((stat, index) => (
+                <div key={index} className="text-center">
+                  <p className="text-3xl md:text-4xl font-bold text-foreground mb-2">{stat.value}</p>
+                  <p className="text-muted-foreground">{stat.label}</p>
                 </div>
               ))}
             </div>
-            <Link to="/auth?mode=register">
-              <Button variant="hero" size="xl" className="gap-2">
-                Join BYAMN WorkHub
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
+          </div>
+        </section>
+
+        {/* How It Works */}
+        <section className="py-20 bg-muted/30">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="font-display text-4xl font-bold text-foreground mb-4">
+                How It Works
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                Getting started is simple. Follow these 3 easy steps to start earning money today.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {steps.map((step, index) => (
+                <Card key={index} className="p-6 hover:shadow-xl transition-shadow">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="h-16 w-16 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white text-2xl font-bold mb-4">
+                      {step.step}
+                    </div>
+                    <h3 className="text-xl font-bold text-foreground mb-2">{step.title}</h3>
+                    <p className="text-muted-foreground">{step.description}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Features */}
+        <section className="py-20">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="font-display text-4xl font-bold text-foreground mb-4">
+                Why Choose Us?
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                We provide the best platform for earning money online with features that make your experience seamless.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {features.map((feature, index) => (
+                <Card key={index} className="p-6 hover:shadow-xl transition-shadow">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-r ${feature.color} flex items-center justify-center mb-4`}>
+                    <feature.icon className="h-6 w-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">{feature.title}</h3>
+                  <p className="text-muted-foreground">{feature.description}</p>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section className="py-20 bg-muted/30">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="font-display text-4xl font-bold text-foreground mb-4">
+                What Our Users Say
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                Join thousands of satisfied users who are earning money with our platform.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {testimonials.map((testimonial, index) => (
+                <Card key={index} className="p-6">
+                  <div className="flex items-center mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-muted-foreground mb-6 italic">"{testimonial.content}"</p>
+                <div>
+                  <p className="font-semibold text-foreground">{testimonial.name}</p>
+                  <p className="text-sm text-muted-foreground">{testimonial.role}</p>
+                </div>
+              </Card>
+            ))}
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="bg-card rounded-2xl p-8 md:p-12 shadow-xl text-center">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <TrendingUp className="h-8 w-8 text-accent" />
-            </div>
-            <h2 className="font-display text-2xl md:text-3xl font-bold mb-4">
-              Ready to Get Work Done?
-            </h2>
-            <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
-              Create a campaign and get genuine Indian workers to complete your tasks. 
-              Pay only for approved work.
-            </p>
-            <Link to="/campaigns/create">
-              <Button size="lg" className="gap-2">
-                Create Your Campaign
+      <section className="py-20 bg-gradient-to-r from-primary to-accent text-primary-foreground">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="font-display text-4xl font-bold mb-4">
+            Ready to Start Earning?
+          </h2>
+          <p className="text-xl mb-8 max-w-2xl mx-auto opacity-90">
+            Join thousands of Indians who are earning money online with our platform. 
+            Sign up today and start earning in minutes.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/auth?mode=register">
+              <Button size="lg" variant="secondary" className="bg-white text-primary hover:bg-gray-100 gap-2 text-lg px-8 py-6">
+                Get Started Now
                 <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to="/about">
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10 gap-2 text-lg px-8 py-6">
+                Learn More
+                <Info className="h-5 w-5" />
               </Button>
             </Link>
           </div>
         </div>
       </section>
+    </main>
 
-      <Footer />
-    </div>
-  );
+    <Footer />
+  </div>
+);
 };
 
 export default Landing;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { ref, get, query, orderByChild, limitToLast, equalTo } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -18,8 +18,19 @@ import {
   CheckCircle2,
   XCircle,
   IndianRupee,
-  PlusCircle
+  PlusCircle,
+  BarChart3,
+  ArrowUp,
+  ArrowDown,
+  Filter,
+  Settings
 } from 'lucide-react';
+import { 
+  fetchWalletData, 
+  fetchWorks, 
+  fetchCampaigns,
+  dataCache
+} from '@/lib/data-cache';
 
 interface WalletData {
   earnedBalance: number;
@@ -48,22 +59,45 @@ const Dashboard = () => {
     activeCampaigns: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!profile?.uid) return;
 
       try {
-        // Fetch wallet
-        const walletSnap = await get(ref(database, `wallets/${profile.uid}`));
-        if (walletSnap.exists()) {
-          setWallet(walletSnap.val());
+        setLoading(true);
+        setError(null);
+
+        // Fetch wallet with error handling
+        let walletData = null;
+        try {
+          walletData = await fetchWalletData(profile.uid);
+          if (walletData) {
+            setWallet(walletData);
+          }
+        } catch (walletError) {
+          console.error('Error fetching wallet:', walletError);
+          // Set default wallet data if fetch fails
+          setWallet({
+            earnedBalance: 0,
+            addedBalance: 0,
+            pendingAddMoney: 0,
+            totalWithdrawn: 0
+          });
         }
 
         // Fetch recent work submissions
-        const worksSnap = await get(ref(database, `works/${profile.uid}`));
-        if (worksSnap.exists()) {
-          const worksData = worksSnap.val();
+        let worksData = {};
+        try {
+          worksData = await fetchWorks(profile.uid);
+        } catch (worksError) {
+          console.error('Error fetching works:', worksError);
+          worksData = {};
+        }
+
+        if (worksData) {
           const worksArray: WorkSubmission[] = Object.entries(worksData).map(([id, data]: [string, any]) => ({
             id,
             ...data,
@@ -87,9 +121,15 @@ const Dashboard = () => {
         }
 
         // Count active campaigns created by user
-        const campaignsSnap = await get(ref(database, 'campaigns'));
-        if (campaignsSnap.exists()) {
-          const campaignsData = campaignsSnap.val();
+        let campaignsData = {};
+        try {
+          campaignsData = await fetchCampaigns();
+        } catch (campaignsError) {
+          console.error('Error fetching campaigns:', campaignsError);
+          campaignsData = {};
+        }
+
+        if (campaignsData) {
           const userCampaigns = Object.values(campaignsData).filter(
             (c: any) => c.creatorId === profile.uid && c.status === 'active'
           );
@@ -97,6 +137,7 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        setError('Failed to load dashboard data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -120,139 +161,181 @@ const Dashboard = () => {
     }
   };
 
+  const statCards = [
+    {
+      title: 'Total Balance',
+      value: `₹${totalBalance.toFixed(2)}`,
+      icon: Wallet,
+      color: 'from-primary to-accent',
+      change: '+12.5%',
+      changeType: 'positive'
+    },
+    {
+      title: 'Approved Works',
+      value: profile?.approvedWorks || 0,
+      icon: CheckCircle2,
+      color: 'from-success to-emerald-500',
+      change: '+8.2%',
+      changeType: 'positive'
+    },
+    {
+      title: 'Pending Works',
+      value: stats.pendingWorks,
+      icon: Clock,
+      color: 'from-pending to-amber-500',
+      change: '-2.1%',
+      changeType: 'negative'
+    },
+    {
+      title: 'My Campaigns',
+      value: stats.activeCampaigns,
+      icon: Briefcase,
+      color: 'from-blue-500 to-cyan-500',
+      change: '+15.3%',
+      changeType: 'positive'
+    }
+  ];
+
+  const quickActions = [
+    {
+      title: 'Browse Campaigns',
+      description: 'Find tasks to complete',
+      icon: Briefcase,
+      color: 'bg-gradient-to-r from-primary to-accent',
+      link: '/campaigns'
+    },
+    {
+      title: 'Create Campaign',
+      description: 'Get work done by others',
+      icon: PlusCircle,
+      color: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+      link: '/campaigns/create'
+    },
+    {
+      title: 'Manage Wallet',
+      description: 'View and manage funds',
+      icon: Wallet,
+      color: 'bg-gradient-to-r from-purple-500 to-indigo-500',
+      link: '/wallet'
+    },
+    {
+      title: 'Leaderboard',
+      description: 'See top earners',
+      icon: Trophy,
+      color: 'bg-gradient-to-r from-amber-500 to-orange-500',
+      link: '/leaderboard'
+    }
+  ];
+
+  if (loading && !profile) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted">
+        <Navbar />
+        <main className="flex-1 container mx-auto px-4 py-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted">
       <Navbar />
       
       <main className="flex-1 container mx-auto px-4 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <h1 className="font-display text-3xl font-bold text-foreground mb-2">
-            Welcome back, {profile?.fullName?.split(' ')[0] || 'User'}! 👋
-          </h1>
-          <p className="text-muted-foreground">
-            Here's an overview of your WorkHub activity.
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card className="card-hover">
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Total Balance</p>
-                  <p className="font-display text-2xl font-bold text-foreground flex items-center">
-                    <IndianRupee className="h-5 w-5" />
-                    {totalBalance.toFixed(2)}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Wallet className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Approved Works</p>
-                  <p className="font-display text-2xl font-bold text-foreground">
-                    {profile?.approvedWorks || 0}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Pending Works</p>
-                  <p className="font-display text-2xl font-bold text-foreground">
-                    {stats.pendingWorks}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-pending/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-pending" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">My Campaigns</p>
-                  <p className="font-display text-2xl font-bold text-foreground">
-                    {stats.activeCampaigns}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <Briefcase className="h-5 w-5 text-accent" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="font-display text-4xl font-bold text-foreground mb-2">
+                Welcome back, {profile?.fullName?.split(' ')[0] || 'User'}! 👋
+              </h1>
+              <p className="text-muted-foreground text-lg">
+                Here's an overview of your WorkHub activity.
+              </p>
+            </div>
+            <div className="hidden md:flex items-center gap-3">
+              <Button variant="outline" size="sm">
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+              </Button>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </div>
+          </div>
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {statCards.map((stat, index) => (
+              <Card key={index} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <div className={`h-2 bg-gradient-to-r ${stat.color}`}></div>
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
+                      <p className="font-display text-3xl font-bold text-foreground">
+                        {stat.value}
+                      </p>
+                      <div className="flex items-center gap-1 mt-2">
+                        {stat.changeType === 'positive' ? (
+                          <ArrowUp className="h-4 w-4 text-success" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4 text-destructive" />
+                        )}
+                        <span className={`text-sm ${stat.changeType === 'positive' ? 'text-success' : 'text-destructive'}`}>
+                          {stat.change} from last month
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`p-3 rounded-lg bg-gradient-to-r ${stat.color} flex items-center justify-center`}>
+                      <stat.icon className="h-6 w-6 text-white" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <Link to="/campaigns">
-            <Card className="card-hover cursor-pointer h-full">
-              <CardContent className="pt-6 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-primary flex items-center justify-center">
-                  <Briefcase className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Browse Campaigns</h3>
-                  <p className="text-sm text-muted-foreground">Find tasks to complete</p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/campaigns/create">
-            <Card className="card-hover cursor-pointer h-full">
-              <CardContent className="pt-6 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-accent flex items-center justify-center">
-                  <PlusCircle className="h-6 w-6 text-accent-foreground" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Create Campaign</h3>
-                  <p className="text-sm text-muted-foreground">Get work done by others</p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/leaderboard">
-            <Card className="card-hover cursor-pointer h-full">
-              <CardContent className="pt-6 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-success flex items-center justify-center">
-                  <Trophy className="h-6 w-6 text-success-foreground" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Leaderboard</h3>
-                  <p className="text-sm text-muted-foreground">See top earners</p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-foreground">Quick Actions</h2>
+            <Link to="/dashboard" className="text-primary hover:underline flex items-center gap-1">
+              View All <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {quickActions.map((action, index) => (
+              <Link to={action.link} key={index} className="block group">
+                <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:-translate-y-1">
+                  <CardContent className="p-6">
+                    <div className={`${action.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                      <action.icon className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-lg text-foreground mb-2">{action.title}</h3>
+                    <p className="text-muted-foreground text-sm mb-4">{action.description}</p>
+                    <div className="flex items-center text-primary text-sm font-medium">
+                      Get started
+                      <ArrowRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
 
-        {/* Recent Work */}
-        <div className="grid lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Recent Work */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold">Recent Work</CardTitle>
@@ -264,22 +347,32 @@ const Dashboard = () => {
               </Link>
             </CardHeader>
             <CardContent>
-              {recentWork.length === 0 ? (
-                <div className="text-center py-8">
-                  <Briefcase className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-muted-foreground">No work submissions yet</p>
+              {error && (
+                <div className="text-center py-12">
+                  <XCircle className="h-16 w-16 text-destructive/30 mx-auto mb-4" />
+                  <p className="text-destructive text-lg mb-2">Error Loading Data</p>
+                  <p className="text-muted-foreground mb-4">{error}</p>
+                  <Button onClick={() => window.location.reload()}>Retry</Button>
+                </div>
+              )}
+              {!error && recentWork.length === 0 ? (
+                <div className="text-center py-12">
+                  <Briefcase className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground text-lg mb-2">No work submissions yet</p>
+                  <p className="text-muted-foreground mb-4">Start working on campaigns to see your progress here</p>
                   <Link to="/campaigns">
-                    <Button variant="outline" size="sm" className="mt-4">
-                      Start Working
+                    <Button className="gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Browse Campaigns
                     </Button>
                   </Link>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {recentWork.map((work) => (
                     <div
                       key={work.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground truncate">
@@ -315,56 +408,120 @@ const Dashboard = () => {
               </Link>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg bg-success/5 border border-success/20">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-                      <TrendingUp className="h-5 w-5 text-success" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Earned Balance</p>
-                      <p className="font-semibold text-foreground">From completed tasks</p>
-                    </div>
-                  </div>
-                  <p className="font-display text-xl font-bold text-success flex items-center">
-                    <IndianRupee className="h-4 w-4" />
-                    {(wallet?.earnedBalance || 0).toFixed(2)}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Wallet className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Added Balance</p>
-                      <p className="font-semibold text-foreground">For campaigns</p>
-                    </div>
-                  </div>
-                  <p className="font-display text-xl font-bold text-primary flex items-center">
-                    <IndianRupee className="h-4 w-4" />
-                    {(wallet?.addedBalance || 0).toFixed(2)}
-                  </p>
-                </div>
-
-                {(wallet?.pendingAddMoney || 0) > 0 && (
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-pending/5 border border-pending/20">
+              {wallet ? (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-success/10 to-emerald-500/10 border border-success/20">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-pending/10 flex items-center justify-center">
-                        <Clock className="h-5 w-5 text-pending" />
+                      <div className="h-12 w-12 rounded-xl bg-gradient-to-r from-success to-emerald-500 flex items-center justify-center">
+                        <TrendingUp className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Pending Approval</p>
-                        <p className="font-semibold text-foreground">Add money requests</p>
+                        <p className="text-sm text-muted-foreground">Earned Balance</p>
+                        <p className="font-semibold text-foreground">From completed tasks</p>
                       </div>
                     </div>
-                    <p className="font-display text-xl font-bold text-pending flex items-center">
-                      <IndianRupee className="h-4 w-4" />
-                      {(wallet?.pendingAddMoney || 0).toFixed(2)}
+                    <p className="font-display text-2xl font-bold text-success flex items-center">
+                      <IndianRupee className="h-5 w-5" />
+                      {(wallet.earnedBalance || 0).toFixed(2)}
                     </p>
                   </div>
-                )}
+
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-xl bg-gradient-to-r from-primary to-accent flex items-center justify-center">
+                        <Wallet className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Added Balance</p>
+                        <p className="font-semibold text-foreground">For campaigns</p>
+                      </div>
+                    </div>
+                    <p className="font-display text-2xl font-bold text-primary flex items-center">
+                      <IndianRupee className="h-4 w-4" />
+                      {(wallet.addedBalance || 0).toFixed(2)}
+                    </p>
+                  </div>
+
+                  {(wallet.pendingAddMoney || 0) > 0 && (
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-pending/10 to-amber-500/10 border border-pending/20">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-r from-pending to-amber-500 flex items-center justify-center">
+                          <Clock className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Pending Approval</p>
+                          <p className="font-semibold text-foreground">Add money requests</p>
+                        </div>
+                      </div>
+                      <p className="font-display text-2xl font-bold text-pending flex items-center">
+                        <IndianRupee className="h-4 w-4" />
+                        {(wallet.pendingAddMoney || 0).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <Trophy className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Withdrawn</p>
+                        <p className="font-semibold text-foreground">Money withdrawn</p>
+                      </div>
+                    </div>
+                    <p className="font-display text-2xl font-bold text-blue-500 flex items-center">
+                      <IndianRupee className="h-4 w-4" />
+                      {(wallet.totalWithdrawn || 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Wallet className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Wallet data not available</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Performance Section */}
+        <div className="mt-12">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Performance Overview</CardTitle>
+              <div className="flex gap-2">
+                <Button 
+                  variant={timeRange === 'week' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setTimeRange('week')}
+                >
+                  Week
+                </Button>
+                <Button 
+                  variant={timeRange === 'month' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setTimeRange('month')}
+                >
+                  Month
+                </Button>
+                <Button 
+                  variant={timeRange === 'year' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setTimeRange('year')}
+                >
+                  Year
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 flex items-center justify-center bg-muted/30 rounded-lg">
+                <div className="text-center">
+                  <BarChart3 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-lg font-medium text-foreground">Performance Chart</p>
+                  <p className="text-muted-foreground">Your work performance over time</p>
+                </div>
               </div>
             </CardContent>
           </Card>
