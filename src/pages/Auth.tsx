@@ -7,8 +7,6 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Loader2 } from 'lucide-react';
 import { z } from 'zod';
-import Navbar from '@/components/layout/Navbar';
-import Footer from '@/components/layout/Footer';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -157,7 +155,11 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-<Navbar />
+        <Link to="/" className="inline-flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-8 transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Home
+        </Link>
+
         <div className="bg-card rounded-2xl shadow-xl p-8 animate-scale-in">
           <div className="text-center mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary mx-auto mb-4">
@@ -339,7 +341,6 @@ const Auth = () => {
           </Link>
         </p>
       </div>
-       <Footer />
     </div>
   );
 };
