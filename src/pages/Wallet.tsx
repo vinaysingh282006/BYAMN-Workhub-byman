@@ -42,7 +42,7 @@ import {
   fetchTransactions,
   invalidateUserCache,
   dataCache,
-  createTransactionAndAdjustWallet
+  updateWalletBalance
 } from '@/lib/data-cache';
 
 interface WalletData {
@@ -195,7 +195,8 @@ const Wallet = () => {
         }
       }
 
-      // Create transaction and adjust wallet atomically
+      // Create transaction record first
+      const transactionRef = push(ref(database, `transactions/${profile.uid}`));
       const transaction = {
         type: 'add_money',
         amount,
@@ -204,12 +205,8 @@ const Wallet = () => {
         upiTransactionId: addMoneyForm.upiTransactionId,
         createdAt: Date.now(),
       };
-
-      // Update wallet to reflect pending add money
-      await createTransactionAndAdjustWallet(profile.uid, transaction, {
-        pendingAddMoney: amount
-      }, profile.uid);
-
+      await set(transactionRef, transaction);
+      
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/addMoney'));
       await set(requestRef, {
@@ -223,6 +220,11 @@ const Wallet = () => {
         transactionId: requestRef.key, // Use the admin request ID as transactionId
       });
 
+      // Update wallet to reflect pending add money using atomic operation
+      await updateWalletBalance(profile.uid, (currentBalance) => ({
+        pendingAddMoney: (currentBalance.pendingAddMoney || 0) + amount
+      }), profile.uid);
+
       toast({
         title: 'Request Submitted',
         description: 'Your add money request is pending admin approval.',
@@ -231,7 +233,7 @@ const Wallet = () => {
       setAddMoneyOpen(false);
       setAddMoneyForm({ amount: '', upiTransactionId: '' });
       
-      // Refetch data
+      // Refetch data to update UI
       const updatedWallet = await fetchWalletData(profile.uid);
       if (updatedWallet) {
         setWallet(updatedWallet);
@@ -325,7 +327,8 @@ const Wallet = () => {
         }
       }
 
-      // Create transaction and adjust wallet atomically
+      // Create transaction record first
+      const transactionRef = push(ref(database, `transactions/${profile.uid}`));
       const transaction = {
         type: 'withdrawal',
         amount,
@@ -334,11 +337,8 @@ const Wallet = () => {
         upiId: withdrawForm.upiId,
         createdAt: Date.now(),
       };
-
-      await createTransactionAndAdjustWallet(profile.uid, transaction, {
-        earnedBalance: -amount // Deduct from earned balance
-      }, profile.uid);
-
+      await set(transactionRef, transaction);
+      
       // Create admin request
       const requestRef = push(ref(database, 'adminRequests/withdrawals'));
       await set(requestRef, {
@@ -352,6 +352,11 @@ const Wallet = () => {
         transactionId: requestRef.key, // Use the admin request ID as transactionId
       });
 
+      // Update wallet to reflect pending withdrawal using atomic operation
+      await updateWalletBalance(profile.uid, (currentBalance) => ({
+        earnedBalance: (currentBalance.earnedBalance || 0) - amount
+      }), profile.uid);
+
       toast({
         title: 'Withdrawal Requested',
         description: 'Your withdrawal request is pending admin approval.',
@@ -360,7 +365,7 @@ const Wallet = () => {
       setWithdrawOpen(false);
       setWithdrawForm({ amount: '', upiId: '' });
       
-      // Refetch data
+      // Refetch data to update UI
       const updatedWallet = await fetchWalletData(profile.uid);
       if (updatedWallet) {
         setWallet(updatedWallet);

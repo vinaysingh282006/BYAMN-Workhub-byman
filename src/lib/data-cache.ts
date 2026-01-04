@@ -170,6 +170,10 @@ export const updateWalletBalance = async (
     if (result.committed) {
       // Update cache with new data
       dataCache.set(cacheKey, result.snapshot.val());
+      
+      // Invalidate related caches to ensure consistency
+      invalidateUserCache(uid);
+      
       return result.snapshot.val();
     } else {
       // Transaction was aborted
@@ -238,6 +242,9 @@ export const createTransactionAndAdjustWallet = async (
     if (result.committed) {
       // Update cache with new data
       dataCache.set(cacheKey, result.snapshot.val());
+      
+      // Invalidate related caches to ensure consistency
+      invalidateUserCache(uid);
     }
   } catch (error) {
     console.error('Error creating transaction and updating wallet:', error);
@@ -311,8 +318,8 @@ export const deductCampaignBudget = async (
       });
       
       if (walletResult.committed) {
-        // Invalidate cache
-        dataCache.clear(`wallet:${uid}`);
+        // Invalidate user caches to ensure consistency
+        invalidateUserCache(uid);
         dataCache.clear(`campaigns:all`);
         return true;
       } else {
@@ -398,9 +405,8 @@ export const approveWorkAndCredit = async (
           });
         }
         
-        // Invalidate cache
-        dataCache.clear(`wallet:${userId}`);
-        dataCache.clear(`works:${userId}`);
+        // Invalidate user caches to ensure consistency
+        invalidateUserCache(userId);
         return true;
       } else {
         // Rollback work status if wallet update failed
@@ -469,7 +475,8 @@ export const processMoneyRequest = async (
         });
         
         if (result.committed) {
-          dataCache.clear(`wallet:${userId}`);
+          // Invalidate user caches to ensure consistency
+          invalidateUserCache(userId);
           return true;
         } else {
           // Rollback request status if wallet update failed
@@ -508,7 +515,8 @@ export const processMoneyRequest = async (
             });
           }
           
-          dataCache.clear(`wallet:${userId}`);
+          // Invalidate user caches to ensure consistency
+          invalidateUserCache(userId);
           return true;
         } else {
           // Rollback request status if wallet update failed
@@ -583,8 +591,8 @@ export const applyToCampaign = async (
       completedWorkers: campaignData.completedWorkers + 1
     });
 
-    // Invalidate cache
-    dataCache.clear(`works:${userId}`);
+    // Invalidate user caches to ensure consistency
+    invalidateUserCache(userId);
     dataCache.clear(`campaigns:all`);
     dataCache.clear(`campaign:${campaignId}`);
 
@@ -628,9 +636,8 @@ export const submitWorkForCampaign = async (
       submittedAt: Date.now(),
     });
 
-    // Invalidate cache
-    dataCache.clear(`works:${userId}`);
-    dataCache.clear(`works:${userId}:${campaignId}`);
+    // Invalidate user caches to ensure consistency
+    invalidateUserCache(userId);
 
     return true;
   } catch (error) {
@@ -682,8 +689,8 @@ export const rejectWorkAndRestoreCampaignBudget = async (
       }
     }
 
-    // Invalidate cache
-    dataCache.clear(`works:${userId}`);
+    // Invalidate user caches to ensure consistency
+    invalidateUserCache(userId);
     dataCache.clear(`campaigns:all`);
     dataCache.clear(`campaign:${campaignId}`);
 
