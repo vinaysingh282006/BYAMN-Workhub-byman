@@ -96,7 +96,11 @@ const Wallet = () => {
 
   useEffect(() => {
     const fetchWalletAndTransactions = async () => {
-      if (!profile?.uid) return;
+      if (!profile?.uid) {
+        setError('User not authenticated. Please log in to access your wallet.');
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
@@ -106,6 +110,13 @@ const Wallet = () => {
         const walletData = await fetchWalletData(profile.uid);
         if (walletData) {
           setWallet(walletData);
+        } else {
+          setWallet({
+            earnedBalance: 0,
+            addedBalance: 0,
+            pendingAddMoney: 0,
+            totalWithdrawn: 0
+          });
         }
 
         // Fetch transactions
@@ -116,12 +127,18 @@ const Wallet = () => {
               id,
               ...trans,
             }))
+            .filter((trans): trans is Transaction => {
+              // Filter out invalid transactions
+              return trans && trans.type && trans.amount !== undefined && trans.createdAt !== undefined;
+            })
             .sort((a, b) => b.createdAt - a.createdAt);
           setTransactions(transArray);
+        } else {
+          setTransactions([]);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching wallet:', error);
-        setError('Failed to load wallet data. Please try again later.');
+        setError(error.message || 'Failed to load wallet data. Please try again later.');
         // Set default values
         setWallet({
           earnedBalance: 0,
@@ -139,7 +156,14 @@ const Wallet = () => {
   }, [profile?.uid]);
 
   const handleAddMoney = async () => {
-    if (!profile?.uid) return;
+    if (!profile?.uid) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to add money.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const amount = parseFloat(addMoneyForm.amount);
     const result = addMoneySchema.safeParse({
@@ -176,9 +200,9 @@ const Wallet = () => {
         const oneHourAgo = now - (60 * 60 * 1000); // 1 hour in milliseconds
         
         let recentAddMoneyCount = 0;
-        for (const trans of Object.values(recentTrans)) {
+        for (const trans of Object.values(recentTrans || {})) {
           const transaction = trans as Transaction;
-          if (transaction.type === 'add_money' && transaction.createdAt > oneHourAgo) {
+          if (transaction.type === 'add_money' && transaction.createdAt && transaction.createdAt > oneHourAgo) {
             recentAddMoneyCount++;
           }
         }
@@ -244,14 +268,18 @@ const Wallet = () => {
             id,
             ...trans,
           }))
+          .filter((trans): trans is Transaction => {
+            // Filter out invalid transactions
+            return trans && trans.type && trans.amount !== undefined && trans.createdAt !== undefined;
+          })
           .sort((a, b) => b.createdAt - a.createdAt);
         setTransactions(transArray);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding money:', error);
       toast({
         title: 'Error',
-        description: 'Failed to submit request. Please try again.',
+        description: error.message || 'Failed to submit request. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -260,7 +288,23 @@ const Wallet = () => {
   };
 
   const handleWithdraw = async () => {
-    if (!profile?.uid || !wallet) return;
+    if (!profile?.uid) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to withdraw money.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (!wallet) {
+      toast({
+        title: 'Wallet Error',
+        description: 'Wallet data not loaded. Please refresh the page.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const amount = parseFloat(withdrawForm.amount);
     const result = withdrawSchema.safeParse({
@@ -306,9 +350,9 @@ const Wallet = () => {
         const oneHourAgo = now - (60 * 60 * 1000); // 1 hour in milliseconds
         
         let recentWithdrawCount = 0;
-        for (const trans of Object.values(recentTrans)) {
+        for (const trans of Object.values(recentTrans || {})) {
           const transaction = trans as Transaction;
-          if (transaction.type === 'withdrawal' && transaction.createdAt > oneHourAgo) {
+          if (transaction.type === 'withdrawal' && transaction.createdAt && transaction.createdAt > oneHourAgo) {
             recentWithdrawCount++;
           }
         }
@@ -373,14 +417,18 @@ const Wallet = () => {
             id,
             ...trans,
           }))
+          .filter((trans): trans is Transaction => {
+            // Filter out invalid transactions
+            return trans && trans.type && trans.amount !== undefined && trans.createdAt !== undefined;
+          })
           .sort((a, b) => b.createdAt - a.createdAt);
         setTransactions(transArray);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error withdrawing:', error);
       toast({
         title: 'Error',
-        description: 'Failed to submit request. Please try again.',
+        description: error.message || 'Failed to submit request. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -398,7 +446,7 @@ const Wallet = () => {
       case 'rejected':
         return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Rejected</Badge>;
       default:
-        return null;
+        return <Badge variant="outline" className="bg-muted text-muted-foreground">Unknown</Badge>;
     }
   };
 
@@ -420,9 +468,24 @@ const Wallet = () => {
   const totalBalance = (wallet?.earnedBalance || 0) + (wallet?.addedBalance || 0);
 
   const transactionStats = {
-    earnings: transactions.filter(t => t.type === 'earning').reduce((sum, t) => sum + t.amount, 0),
-    withdrawals: transactions.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.amount, 0),
-    added: transactions.filter(t => t.type === 'add_money').reduce((sum, t) => sum + t.amount, 0),
+    earnings: transactions.filter(t => t.type === 'earning').reduce((sum, t) => {
+      if (typeof t.amount === 'number' && t.status === 'approved') {
+        return sum + t.amount;
+      }
+      return sum;
+    }, 0),
+    withdrawals: transactions.filter(t => t.type === 'withdrawal').reduce((sum, t) => {
+      if (typeof t.amount === 'number' && t.status === 'approved') {
+        return sum + t.amount;
+      }
+      return sum;
+    }, 0),
+    added: transactions.filter(t => t.type === 'add_money').reduce((sum, t) => {
+      if (typeof t.amount === 'number' && t.status === 'approved') {
+        return sum + t.amount;
+      }
+      return sum;
+    }, 0),
   };
 
   if (loading && !profile) {

@@ -76,20 +76,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string): Promise<UserProfile | null> => {
     try {
       const profileData = await fetchUserData(uid);
       if (profileData) {
-        setProfile(profileData);
+        // Validate the fetched profile data
+        if (validateUserProfile(profileData).isValid) {
+          setProfile(profileData);
+          return profileData;
+        } else {
+          console.error('Invalid profile data received:', validateUserProfile(profileData).errors);
+          return null;
+        }
       }
-      return profileData;
-    } catch (error) {
+      return null;
+    } catch (error: any) {
       console.error('Error fetching profile:', error);
+      // Optionally set an error state here
       return null;
     }
   };
 
-  const refreshProfile = async () => {
+  const refreshProfile = async (): Promise<void> => {
     if (user) {
       await fetchProfile(user.uid);
     }
@@ -97,67 +105,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        await fetchProfile(user.uid);
-      } else {
+      try {
+        setUser(user);
+        if (user) {
+          await fetchProfile(user.uid);
+        } else {
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
         setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string): Promise<void> => {
     // Validate inputs before creating user
     if (!isValidEmail(email)) {
       throw new Error('Please enter a valid email address');
     }
     
     if (!isValidPassword(password)) {
-      throw new Error('Password must be at least 6 characters and contain at least one letter and one number');
+      throw new Error('Password must be at least 8 characters and contain at least one uppercase, one lowercase, one number and one special character');
     }
     
     if (!isValidName(fullName)) {
       throw new Error('Full name must contain only letters, spaces, hyphens, and apostrophes, and be between 2-50 characters');
     }
 
-    const { user } = await createUserWithEmailAndPassword(auth, email, password);
-    await sendEmailVerification(user);
-    
-    const newProfile: UserProfile = {
-      uid: user.uid,
-      email: email,
-      fullName: sanitizeInput(fullName),
-      bio: '',
-      socialLinks: {},
-      role: 'user',
-      isBlocked: false,
-      createdAt: Date.now(),
-      earnedMoney: 0,
-      addedMoney: 0,
-      approvedWorks: 0,
-      totalWithdrawn: 0,
-    };
-    
-    await set(ref(database, `users/${user.uid}`), newProfile);
-    
-    // Initialize wallet
-    await set(ref(database, `wallets/${user.uid}`), {
-      earnedBalance: 0,
-      addedBalance: 0,
-      pendingAddMoney: 0,
-      totalWithdrawn: 0,
-    });
-    
-    // Set profile in cache
-    dataCache.set(`user:${user.uid}`, newProfile);
-    
-    setProfile(newProfile);
+    try {
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(user);
+      
+      const newProfile: UserProfile = {
+        uid: user.uid,
+        email: email,
+        fullName: sanitizeInput(fullName),
+        bio: '',
+        socialLinks: {},
+        role: 'user',
+        isBlocked: false,
+        createdAt: Date.now(),
+        earnedMoney: 0,
+        addedMoney: 0,
+        approvedWorks: 0,
+        totalWithdrawn: 0,
+      };
+      
+      await set(ref(database, `users/${user.uid}`), newProfile);
+      
+      // Initialize wallet
+      await set(ref(database, `wallets/${user.uid}`), {
+        earnedBalance: 0,
+        addedBalance: 0,
+        pendingAddMoney: 0,
+        totalWithdrawn: 0,
+      });
+      
+      // Set profile in cache
+      dataCache.set(`user:${user.uid}`, newProfile);
+      
+      setProfile(newProfile);
+    } catch (error: any) {
+      console.error('Error during sign up:', error);
+      // Clean up in case of error
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('Email already in use. Please use a different email address.');
+      } else {
+        throw new Error('Failed to create account. Please try again later.');
+      }
+    }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<void> => {
     // Validate inputs before signing in
     if (!isValidEmail(email)) {
       throw new Error('Please enter a valid email address');
@@ -167,30 +191,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Password cannot be empty');
     }
     
-    await signInWithEmailAndPassword(auth, email, password);
-  };
-
-  const logout = async () => {
-    await signOut(auth);
-    setUser(null);
-    setProfile(null);
-    
-    // Clear user cache
-    if (user) {
-      clearUserCache(user.uid);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      console.error('Error during sign in:', error);
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email. Please check your email or sign up for a new account.');
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Too many failed login attempts. Please try again later.');
+      } else {
+        throw new Error('Failed to sign in. Please check your credentials and try again.');
+      }
     }
   };
 
-  const resetPassword = async (email: string) => {
+  const logout = async (): Promise<void> => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      setUser(null);
+      setProfile(null);
+      
+      // Clear user cache
+      if (user) {
+        clearUserCache(user.uid);
+      }
+    }
+  };
+
+  const resetPassword = async (email: string): Promise<void> => {
     if (!isValidEmail(email)) {
       throw new Error('Please enter a valid email address');
     }
     
-    await sendPasswordResetEmail(auth, email);
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      console.error('Error during password reset:', error);
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email address.');
+      } else {
+        throw new Error('Failed to send password reset email. Please try again later.');
+      }
+    }
   };
 
-  const updateProfile = async (data: Partial<UserProfile>) => {
-    if (!user) return;
+  const updateProfile = async (data: Partial<UserProfile>): Promise<void> => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
     
     // Validate and sanitize the profile data
     const validation = validateAndSanitizeProfile(data);
@@ -200,11 +253,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const sanitizedData = validation.sanitizedData;
     
-    await update(ref(database, `users/${user.uid}`), sanitizedData);
-    
-    // Invalidate and update cache
-    invalidateUserCache(user.uid);
-    await fetchProfile(user.uid);
+    try {
+      await update(ref(database, `users/${user.uid}`), sanitizedData);
+      
+      // Invalidate and update cache
+      invalidateUserCache(user.uid);
+      await fetchProfile(user.uid);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw new Error('Failed to update profile. Please try again later.');
+    }
   };
 
   const value = {

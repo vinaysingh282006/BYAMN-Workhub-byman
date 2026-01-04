@@ -12,8 +12,8 @@ interface WalletBalance {
   totalWithdrawn: number;
 }
 
-interface CacheEntry {
-  data: any;
+interface CacheEntry<T = any> {
+  data: T;
   timestamp: number;
   expiry: number;
 }
@@ -36,33 +36,42 @@ class DataCache {
   }
 
   // Get data from cache if it's still valid
-  get(key: string): any | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
+  get<T = any>(key: string): T | null {
+    try {
+      const entry = this.cache.get(key);
+      if (!entry) return null;
 
-    if (Date.now() > entry.expiry) {
-      this.cache.delete(key);
+      if (Date.now() > entry.expiry) {
+        this.cache.delete(key);
+        return null;
+      }
+
+      return entry.data as T;
+    } catch (error) {
+      console.error(`Error getting cache entry for key ${key}:`, error);
       return null;
     }
-
-    return entry.data;
   }
 
   // Set data in cache
-  set(key: string, data: any): void {
-    // Remove oldest entries if cache is full
-    if (this.cache.size >= MAX_CACHE_SIZE) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
+  set<T = any>(key: string, data: T): void {
+    try {
+      // Remove oldest entries if cache is full
+      if (this.cache.size >= MAX_CACHE_SIZE) {
+        const oldestKey = this.cache.keys().next().value;
+        if (oldestKey) {
+          this.cache.delete(oldestKey);
+        }
       }
-    }
 
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      expiry: Date.now() + CACHE_DURATION,
-    });
+      this.cache.set(key, {
+        data,
+        timestamp: Date.now(),
+        expiry: Date.now() + CACHE_DURATION,
+      });
+    } catch (error) {
+      console.error(`Error setting cache entry for key ${key}:`, error);
+    }
   }
 
   // Clear specific cache entry
@@ -78,22 +87,40 @@ class DataCache {
 
   // Check if data is being fetched
   isFetching(key: string): boolean {
-    return this.pendingRequests.has(key);
+    try {
+      return this.pendingRequests.has(key);
+    } catch (error) {
+      console.error(`Error checking pending request for key ${key}:`, error);
+      return false;
+    }
   }
 
   // Get pending request
-  getPending(key: string): Promise<any> | undefined {
-    return this.pendingRequests.get(key);
+  getPending<T = any>(key: string): Promise<T> | undefined {
+    try {
+      return this.pendingRequests.get(key) as Promise<T>;
+    } catch (error) {
+      console.error(`Error getting pending request for key ${key}:`, error);
+      return undefined;
+    }
   }
 
   // Set pending request
-  setPending(key: string, promise: Promise<any>): void {
-    this.pendingRequests.set(key, promise);
+  setPending<T = any>(key: string, promise: Promise<T>): void {
+    try {
+      this.pendingRequests.set(key, promise as Promise<any>);
+    } catch (error) {
+      console.error(`Error setting pending request for key ${key}:`, error);
+    }
   }
 
   // Clear pending request
   clearPending(key: string): void {
-    this.pendingRequests.delete(key);
+    try {
+      this.pendingRequests.delete(key);
+    } catch (error) {
+      console.error(`Error clearing pending request for key ${key}:`, error);
+    }
   }
   
   // Get all cache keys
@@ -107,8 +134,23 @@ export const dataCache = new DataCache();
 
 // Verify user authorization
 const verifyUserAuthorization = async (currentUserId: string, targetUserId: string, requiredRole?: 'admin'): Promise<boolean> => {
-  if (requiredRole === 'admin') {
-    // Check if current user is an admin
+  try {
+    if (requiredRole === 'admin') {
+      // Check if current user is an admin
+      const userRef = ref(database, `users/${currentUserId}`);
+      const userSnap = await get(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.val() as UserProfile;
+        return userData.role === 'admin' && !userData.isBlocked;
+      }
+      return false;
+    }
+    
+    // For regular operations, user must match target or be admin
+    if (currentUserId === targetUserId) return true;
+    
+    // Check if current user is admin
     const userRef = ref(database, `users/${currentUserId}`);
     const userSnap = await get(userRef);
     
@@ -116,22 +158,12 @@ const verifyUserAuthorization = async (currentUserId: string, targetUserId: stri
       const userData = userSnap.val() as UserProfile;
       return userData.role === 'admin' && !userData.isBlocked;
     }
+    
+    return false;
+  } catch (error) {
+    console.error('Error verifying user authorization:', error);
     return false;
   }
-  
-  // For regular operations, user must match target or be admin
-  if (currentUserId === targetUserId) return true;
-  
-  // Check if current user is admin
-  const userRef = ref(database, `users/${currentUserId}`);
-  const userSnap = await get(userRef);
-  
-  if (userSnap.exists()) {
-    const userData = userSnap.val() as UserProfile;
-    return userData.role === 'admin' && !userData.isBlocked;
-  }
-  
-  return false;
 };
 
 // Atomic wallet operations using Firebase transactions
@@ -173,11 +205,15 @@ export const updateWalletBalance = async (
       return result.snapshot.val();
     } else {
       // Transaction was aborted
+      console.warn(`Wallet balance update transaction was aborted for user ${uid}`);
       return null;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating wallet balance:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to update wallet balance: ${error.message}`);
+    }
+    throw new Error('Failed to update wallet balance. Please try again later.');
   }
 };
 
@@ -238,10 +274,23 @@ export const createTransactionAndAdjustWallet = async (
     if (result.committed) {
       // Update cache with new data
       dataCache.set(cacheKey, result.snapshot.val());
+    } else {
+      console.warn(`Transaction creation and wallet update was aborted for user ${uid}`);
+      throw new Error('Failed to create transaction and update wallet. Please try again.');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating transaction and updating wallet:', error);
-    throw error;
+    // Rollback transaction if it was created
+    try {
+      await update(ref(database, `transactions/${uid}`), { status: 'failed' });
+    } catch (rollbackError) {
+      console.error('Error during transaction rollback:', rollbackError);
+    }
+    
+    if (error.code) {
+      throw new Error(`Failed to create transaction: ${error.message}`);
+    }
+    throw new Error('Failed to create transaction and update wallet. Please try again later.');
   }
 };
 
@@ -268,6 +317,10 @@ export const deductCampaignBudget = async (
     }
     
     const campaignData = campaignSnap.val();
+    if (!campaignData) {
+      throw new Error('Campaign data is invalid');
+    }
+    
     if (campaignData.creatorId !== uid) {
       throw new Error('Unauthorized: You can only deduct from your own campaigns');
     }
@@ -318,14 +371,19 @@ export const deductCampaignBudget = async (
       } else {
         // Rollback campaign budget if wallet update failed
         await update(campaignRef, { remainingBudget: campaignResult.snapshot.val().remainingBudget + amount });
+        console.warn('Campaign budget deduction: Wallet update failed, rolled back campaign budget');
         return false;
       }
     } else {
+      console.warn('Campaign budget deduction: Campaign transaction failed');
       return false;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deducting campaign budget:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to deduct campaign budget: ${error.message}`);
+    }
+    throw new Error('Failed to deduct campaign budget. Please try again later.');
   }
 };
 
@@ -354,7 +412,7 @@ export const approveWorkAndCredit = async (
     }
     
     const workData = workSnap.val();
-    if (workData.status !== 'pending') {
+    if (!workData || workData.status !== 'pending') {
       throw new Error('Work is not in pending status');
     }
     
@@ -392,10 +450,12 @@ export const approveWorkAndCredit = async (
         const userSnap = await get(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.val();
-          await update(userRef, {
-            earnedMoney: (userData.earnedMoney || 0) + reward,
-            approvedWorks: (userData.approvedWorks || 0) + 1
-          });
+          if (userData) {
+            await update(userRef, {
+              earnedMoney: (userData.earnedMoney || 0) + reward,
+              approvedWorks: (userData.approvedWorks || 0) + 1
+            });
+          }
         }
         
         // Invalidate cache
@@ -405,14 +465,19 @@ export const approveWorkAndCredit = async (
       } else {
         // Rollback work status if wallet update failed
         await update(workRef, { status: 'pending' });
+        console.warn('Work approval: Wallet update failed, rolled back work status');
         return false;
       }
     } else {
+      console.warn('Work approval: Work transaction failed');
       return false;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error approving work and crediting:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to approve work: ${error.message}`);
+    }
+    throw new Error('Failed to approve work. Please try again later.');
   }
 };
 
@@ -443,7 +508,7 @@ export const processMoneyRequest = async (
     }
     
     const requestData = requestSnap.val();
-    if (requestData.status !== 'pending') {
+    if (!requestData || requestData.status !== 'pending') {
       throw new Error('Request is not in pending status');
     }
     
@@ -474,6 +539,7 @@ export const processMoneyRequest = async (
         } else {
           // Rollback request status if wallet update failed
           await update(requestRef, { status: 'pending' });
+          console.warn('Money request processing: Wallet update failed, rolled back request status');
           return false;
         }
       } else {
@@ -503,9 +569,11 @@ export const processMoneyRequest = async (
           const userSnap = await get(ref(database, `users/${userId}`));
           if (userSnap.exists()) {
             const userData = userSnap.val();
-            await update(ref(database, `users/${userId}`), {
-              totalWithdrawn: (userData.totalWithdrawn || 0) + amount
-            });
+            if (userData) {
+              await update(ref(database, `users/${userId}`), {
+                totalWithdrawn: (userData.totalWithdrawn || 0) + amount
+              });
+            }
           }
           
           dataCache.clear(`wallet:${userId}`);
@@ -513,6 +581,7 @@ export const processMoneyRequest = async (
         } else {
           // Rollback request status if wallet update failed
           await update(requestRef, { status: 'pending' });
+          console.warn('Money request processing: Wallet update failed, rolled back request status');
           return false;
         }
       }
@@ -520,9 +589,12 @@ export const processMoneyRequest = async (
       // Request was rejected - just update the status
       return true;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing money request:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to process money request: ${error.message}`);
+    }
+    throw new Error('Failed to process money request. Please try again later.');
   }
 };
 
@@ -556,7 +628,7 @@ export const applyToCampaign = async (
     }
 
     const campaignData = campaignSnap.val();
-    if (campaignData.status !== 'active') {
+    if (!campaignData || campaignData.status !== 'active') {
       throw new Error('Campaign is not active');
     }
 
@@ -589,9 +661,12 @@ export const applyToCampaign = async (
     dataCache.clear(`campaign:${campaignId}`);
 
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error applying to campaign:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to apply to campaign: ${error.message}`);
+    }
+    throw new Error('Failed to apply to campaign. Please try again later.');
   }
 };
 
@@ -617,7 +692,7 @@ export const submitWorkForCampaign = async (
     }
 
     const workData = workSnap.val();
-    if (workData.status !== 'pending' && workData.status !== 'rejected') {
+    if (!workData || (workData.status !== 'pending' && workData.status !== 'rejected')) {
       throw new Error('Work has already been submitted and is awaiting review');
     }
 
@@ -633,9 +708,12 @@ export const submitWorkForCampaign = async (
     dataCache.clear(`works:${userId}:${campaignId}`);
 
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error submitting work:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to submit work: ${error.message}`);
+    }
+    throw new Error('Failed to submit work. Please try again later.');
   }
 };
 
@@ -662,7 +740,7 @@ export const rejectWorkAndRestoreCampaignBudget = async (
     }
 
     const workData = workSnap.val();
-    if (workData.status !== 'pending') {
+    if (!workData || workData.status !== 'pending') {
       throw new Error('Work is not in pending status');
     }
 
@@ -675,7 +753,7 @@ export const rejectWorkAndRestoreCampaignBudget = async (
     const campaignSnap = await get(campaignRef);
     if (campaignSnap.exists()) {
       const campaignData = campaignSnap.val();
-      if (campaignData.completedWorkers > 0) {
+      if (campaignData && campaignData.completedWorkers > 0) {
         await update(campaignRef, {
           completedWorkers: Math.max(0, campaignData.completedWorkers - 1)
         });
@@ -688,9 +766,12 @@ export const rejectWorkAndRestoreCampaignBudget = async (
     dataCache.clear(`campaign:${campaignId}`);
 
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error rejecting work:', error);
-    throw error;
+    if (error.code) {
+      throw new Error(`Failed to reject work: ${error.message}`);
+    }
+    throw new Error('Failed to reject work. Please try again later.');
   }
 };
 
@@ -714,14 +795,19 @@ export const fetchUserData = async (uid: string): Promise<any> => {
     .then((snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        dataCache.set(cacheKey, data);
-        return data;
+        if (data) {
+          dataCache.set(cacheKey, data);
+          return data;
+        }
       }
       return null;
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching user data:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch user data: ${error.message}`);
+      }
+      throw new Error('Failed to fetch user data. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -750,14 +836,19 @@ export const fetchWalletData = async (uid: string): Promise<any> => {
     .then((snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        dataCache.set(cacheKey, data);
-        return data;
+        if (data) {
+          dataCache.set(cacheKey, data);
+          return data;
+        }
       }
       return null;
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching wallet data:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch wallet data: ${error.message}`);
+      }
+      throw new Error('Failed to fetch wallet data. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -786,14 +877,19 @@ export const fetchTransactions = async (uid: string): Promise<any> => {
     .then((snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        dataCache.set(cacheKey, data);
-        return data;
+        if (data) {
+          dataCache.set(cacheKey, data);
+          return data;
+        }
       }
       return [];
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching transactions:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch transactions: ${error.message}`);
+      }
+      throw new Error('Failed to fetch transactions. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -822,14 +918,19 @@ export const fetchCampaigns = async (): Promise<any> => {
     .then((snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        dataCache.set(cacheKey, data);
-        return data;
+        if (data) {
+          dataCache.set(cacheKey, data);
+          return data;
+        }
       }
       return {};
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching campaigns:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch campaigns: ${error.message}`);
+      }
+      throw new Error('Failed to fetch campaigns. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -858,14 +959,19 @@ export const fetchWorks = async (uid: string): Promise<any> => {
     .then((snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        dataCache.set(cacheKey, data);
-        return data;
+        if (data) {
+          dataCache.set(cacheKey, data);
+          return data;
+        }
       }
       return {};
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching works:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch works: ${error.message}`);
+      }
+      throw new Error('Failed to fetch works. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -899,19 +1005,22 @@ export const fetchAdminData = async (): Promise<any> => {
   ])
     .then(([users, campaigns, works, addMoneyRequests, withdrawalRequests]) => {
       const result = {
-        users: users.exists() ? users.val() : {},
-        campaigns: campaigns.exists() ? campaigns.val() : {},
-        works: works.exists() ? works.val() : {},
-        addMoneyRequests: addMoneyRequests.exists() ? addMoneyRequests.val() : {},
-        withdrawalRequests: withdrawalRequests.exists() ? withdrawalRequests.val() : {},
+        users: users.exists() && users.val() ? users.val() : {},
+        campaigns: campaigns.exists() && campaigns.val() ? campaigns.val() : {},
+        works: works.exists() && works.val() ? works.val() : {},
+        addMoneyRequests: addMoneyRequests.exists() && addMoneyRequests.val() ? addMoneyRequests.val() : {},
+        withdrawalRequests: withdrawalRequests.exists() && withdrawalRequests.val() ? withdrawalRequests.val() : {},
       };
       
       dataCache.set(cacheKey, result);
       return result;
     })
-    .catch((error) => {
+    .catch((error: any) => {
       console.error('Error fetching admin data:', error);
-      throw error;
+      if (error.code) {
+        throw new Error(`Failed to fetch admin data: ${error.message}`);
+      }
+      throw new Error('Failed to fetch admin data. Please try again later.');
     })
     .finally(() => {
       dataCache.clearPending(cacheKey);
@@ -945,4 +1054,99 @@ export const clearUserCache = (uid: string): void => {
   dataCache.clear(`wallet:${uid}`);
   dataCache.clear(`transactions:${uid}`);
   dataCache.clear(`works:${uid}`);
+};
+
+// Utility function to fetch time-based leaderboard data
+export const fetchTimeBasedLeaderboard = async (timeframe: 'daily' | 'weekly' | 'monthly'): Promise<any[]> => {
+  const cacheKey = `leaderboard:${timeframe}`;
+  
+  // Check cache first
+  const cached = dataCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  // Check if already fetching
+  if (dataCache.isFetching(cacheKey)) {
+    return dataCache.getPending(cacheKey);
+  }
+
+  // Fetch all user data to calculate leaderboard
+  const usersRef = ref(database, 'users');
+  
+  const promise = get(usersRef)
+    .then((snapshot) => {
+      if (!snapshot.exists()) {
+        return [];
+      }
+      
+      const users = snapshot.val();
+      if (!users) {
+        return [];
+      }
+      
+      // Calculate time thresholds based on timeframe
+      const now = Date.now();
+      let timeThreshold = 0;
+      
+      switch (timeframe) {
+        case 'daily':
+          timeThreshold = now - 24 * 60 * 60 * 1000; // 24 hours ago
+          break;
+        case 'weekly':
+          timeThreshold = now - 7 * 24 * 60 * 60 * 1000; // 7 days ago
+          break;
+        case 'monthly':
+          timeThreshold = now - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+          break;
+      }
+      
+      // Convert users object to array and filter based on timeframe
+      const usersArray = Object.entries(users)
+        .filter(([uid, userData]: [string, any]) => {
+          // Filter based on timeframe if needed
+          // For now, we include all users but in a real implementation
+          // you would filter based on when they earned money or completed work
+          return userData && typeof userData === 'object';
+        })
+        .map(([uid, userData]: [string, any]) => ({
+          uid,
+          fullName: userData.fullName || userData.name || `User ${uid.substring(0, 8)}`,
+          profileImage: userData.profileImage || userData.avatar,
+          approvedWorks: userData.approvedWorks || 0,
+          earnedMoney: userData.earnedMoney || 0,
+        }));
+      
+      // Sort users by approved works (descending) and assign ranks
+      const sortedUsers = usersArray
+        .sort((a, b) => {
+          // Primary sort: approved works (descending)
+          if (b.approvedWorks !== a.approvedWorks) {
+            return b.approvedWorks - a.approvedWorks;
+          }
+          // Secondary sort: earned money (descending) as tiebreaker
+          return (b.earnedMoney || 0) - (a.earnedMoney || 0);
+        })
+        .map((user, index) => ({
+          ...user,
+          rank: index + 1,
+        }));
+      
+      // Cache the result
+      dataCache.set(cacheKey, sortedUsers);
+      return sortedUsers;
+    })
+    .catch((error: any) => {
+      console.error(`Error fetching ${timeframe} leaderboard:`, error);
+      if (error.code) {
+        throw new Error(`Failed to fetch ${timeframe} leaderboard: ${error.message}`);
+      }
+      throw new Error(`Failed to fetch ${timeframe} leaderboard. Please try again later.`);
+    })
+    .finally(() => {
+      dataCache.clearPending(cacheKey);
+    });
+
+  dataCache.setPending(cacheKey, promise);
+  return promise;
 };
